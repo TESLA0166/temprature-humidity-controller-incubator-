@@ -1,0 +1,269 @@
+/*
+ * DHT22 PROJECT JOJE.c
+ *
+ * Created: 7/28/2020 12:53:50 PM
+ * Author : MSADEGH
+ */ 
+
+#ifndef F_CPU
+#define  F_CPU 8000000UL
+#endif
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#include <avr/eeprom.h>
+#include <avr/sfr_defs.h>
+#include <avr/wdt.h>
+#include "DHT.h"
+#include "HD44780.h"
+double temperature[1];
+double humidity[1];
+//-------------------------------------------------------------
+//#define  damasater  36.7		// for hen
+
+//#define  humsater   60.0
+
+#define  fanonsater 39.0
+
+#define  damahacher 36.2
+
+// #define  humhacher  70.0
+
+#define  fanonhacher 38.5
+
+//-------------------------------------------------------------
+uint8_t decade;
+uint8_t sec,min;
+uint8_t hour;
+uint8_t ze;
+uint8_t  day=1;
+
+
+ISR(TIMER1_COMPA_vect)
+{
+	
+	
+
+	decade++;
+	
+	if(decade>=10){sec++;decade=0;
+		wdt_reset();
+
+		
+		if(sec>=60){min++;sec=0;}
+		
+		
+		if(min>=60){hour++;min=0;}
+		eeprom_update_byte((uint8_t*)222,hour);
+		
+		
+		if(hour>=24){day++;hour=0;LCD_Clear();}	
+			eeprom_update_byte((uint8_t*)444,day);
+			
+		 if(day>30){day=1;hour=0;}
+			 
+		if(min%30==0)
+		eeprom_update_byte((uint8_t*)333,min);
+		 }
+		
+	if(bit_is_clear(PINC,5))
+	{
+		ze++;
+		
+		if(ze>=40)
+		{
+			wdt_reset();
+			day=1;
+			hour=0;
+			min=0;
+			eeprom_update_byte((uint8_t*)333,min);
+			eeprom_update_byte((uint8_t*)222,hour);
+			eeprom_update_byte((uint8_t*)444,day);
+			
+			
+			if(ze>40 && ze<=50)
+			PORTD |= (1<<6);
+			else
+			PORTD &=  ~(1<<6);
+			
+			
+			
+		}
+		
+	}
+	
+	if(bit_is_set(PINC,5))
+	ze=0;
+	
+	
+	wdt_reset();
+		}
+		 
+
+uint8_t decade2;
+uint8_t san;
+
+ISR(TIMER2_COMP_vect)
+{
+	
+	decade2++;
+	wdt_reset();
+
+	if(decade2>=10){
+		
+		san++;
+		decade2=0;
+
+		if(san>=25){san=0;decade2=0;}
+	}
+
+
+	if(san==24)
+	{
+
+		DHT_Read(temperature,humidity);
+		wdt_reset();
+
+	}
+
+
+
+	
+
+
+	
+	
+	
+
+
+	
+	
+}
+
+
+int main(void)
+{
+day=eeprom_read_byte((uint8_t*)444);		
+hour=eeprom_read_byte((uint8_t*)222);
+min=eeprom_read_byte((uint8_t*)333);	
+	//---------------------------------------------------------------
+
+	DDRB |=(0<<DDB7) | (0<<DDB6) | (1<<DDB5) | (1<<DDB4) | (1<<DDB3) | (1<<DDB2) | (1<<DDB1) | (1<<DDB0);
+	PORTB |=(0<<7) | (0<<6) | (0<<5) | (0<<4) | (0<<3) | (0<<2) | (0<<1) | (0<<0);
+	DDRC |=(1<<DDC6) | (1<<DDC5) | (1<<DDC4) | (1<<DDC3) | (1<<DDC2) | (1<<DDC1) | (1<<DDC0);
+	PORTC |= (0<<6) | (1<<5) | (0<<4) | (0<<3) | (0<<2) | (0<<1) | (0<<0);
+	DDRD |=(1<<DDD7) | (1<<DDD6) | (1<<DDD5) | (1<<DDD4) | (1<<DDD3) | (1<<DDD2) | (1<<DDD1) | (1<<DDD0);
+	PORTD |=(0<<7) | (0<<6) | (0<<5) | (0<<4) | (0<<3) | (0<<2) | (0<<1) | (0<<0);
+	TCCR1B |= (1<<CS10) | (1<<CS12) | (1<<WGM12);
+	OCR1A=780;
+	TIMSK=(1<<OCIE1A) | (1<<OCIE2) ;
+	ASSR=0<<AS2;
+	TCCR2= (1<<WGM21) | (1<<CS22) | (1<<CS21) | (1<<CS20);
+	OCR2=77;
+	sei();
+	wdt_enable(WDTO_120MS);
+
+
+	
+	//-------------------------------------------------------------
+	
+	LCD_Setup();
+	DHT_Setup();
+	LCD_Clear();
+	
+	
+	//---------------------------------------------------------------
+
+	while (1)
+	{
+		// showing temperature & humidity
+		
+		LCD_GotoXY(0, 0);
+		LCD_PrintString("Temp:");
+		LCD_PrintDouble(*temperature, 10);
+		LCD_GotoXY(0, 1);
+		LCD_PrintString("Hum:");
+		LCD_PrintDouble(*humidity, 10);
+		LCD_PrintString("%");
+		
+
+		//--------------------------------------------------------------
+		// showing day
+		//LCD_ClearLine(16);
+		
+		LCD_GotoXY(10,1);
+		LCD_PrintString("DAY:");
+		LCD_PrintInteger(day);
+		
+		
+		//------------------------------------------------------------  satter days
+		
+	if(day<18){		
+			if(*temperature<=37.4)  // red led
+			PORTD |=(1<<0);
+			else
+			if(*temperature>=37.7)
+			PORTD &= ~(1<<0);
+			
+			if(*humidity<=60)
+			PORTD |=(1<<2);
+			
+			else
+			PORTD &= ~(1<<2);
+					
+			if((hour%4)==0 && min<=3)       // white or yellow  led  rotate
+			
+			PORTD |= (1<<1);
+			else
+			PORTD &=  ~(1<<1);
+	}
+		
+		
+		if(day>=18){                        	//-------------------------------------------------------------   hatcher days
+			if(*temperature<=36.9)  // red led
+			PORTD |=(1<<0);
+			else
+			if(*temperature>=37.2)
+			PORTD &= ~(1<<0);
+			
+				if(*humidity<=70)
+				PORTD |=(1<<2);
+				
+				else
+				PORTD &= ~(1<<2);
+				
+			PORTD &=  ~(1<<1);		 // white led PIN D 1  ;  no need to rotate on hatch days
+			
+		}
+		
+	
+		
+		
+			
+			
+			
+		
+		
+		//-------------------------------------------------------------
+		
+		if(day>=2)  // bazzer  system alarm
+		(*temperature>42 || *temperature<30 || (*humidity<30) || (*humidity>80) )   ?   (PORTD |= (1<<6))   :   (PORTD &= ~(1<<6)) ;
+		
+		
+		
+		
+		
+		
+		
+		wdt_reset();
+
+		
+	}
+	
+	
+	
+	return 0;
+	
+	
+	
+}
